@@ -3,6 +3,9 @@ from pymunk import Vec2d
 import matplotlib.pyplot as plt
 import matplotlib.lines as mlines
 import time
+import numpy as np
+import cv2
+
 
 class EnvironmentState:
     def __init__(self):
@@ -10,9 +13,9 @@ class EnvironmentState:
         self.space.damping = 0.9 # to slow down bodies
         # make arms
         self.root0 = (0,0)
-        self.arm0 = Arm(self.root0, 10)
-        self.root1 = (0,10)
-        self.arm1 = Arm((0,10), 6)
+        self.arm0 = Arm(self.root0, 22)
+        self.root1 = (0,24)
+        self.arm1 = Arm(self.root1, 18)
         self.space.add(self.arm0.body,
                        self.arm0.shape,
                        self.arm1.body,
@@ -27,9 +30,15 @@ class EnvironmentState:
         self.space.add(self.drs0)
         self.drs1 = pm.DampedRotarySpring(self.arm1.body, self.arm0.body, 0, 0, 1)
         self.space.add(self.drs1)
+        # canvas 28 * 28
+        self.canvas = Canvas()
 
     def get_current_state(self):
-        return self.arm0.info_dump(), self.arm1.info_dump()
+        return self.arm0.info_dump(), self.arm1.info_dump(), self.canvas.canvas
+
+    def draw(self, strength=1):
+        tip_coor = np.round(self.arm1.get_extend_coor()).astype(np.uint8)
+        return self.canvas.draw_point(tip_coor, strength)
 
     def apply_torque_acw_1(self, torque=5):
         self.drs1.stiffness = self.spring_stiffness
@@ -122,6 +131,33 @@ class Arm:
 
     def apply_pinch_acw(self, torque=5):
         self.apply_pinch_cw(-torque)
+
+class Canvas:
+    def __init__(self, width=28, height=28):
+        self.width = width
+        self.height = height
+        self.canvas = np.zeros((self.width, self.height, 1), np.uint8)
+
+    def on_canvas(self, point):
+        x, y = point[0], point[1]
+        return 0 <= x and x <= self.width and 0 <= y and y <= self.height
+
+    def draw_point(self, point, strength):
+        if self.on_canvas(point):
+            s = self.canvas[point] + strength
+            self.canvas[point] = s if s < 255 else 255
+            return [1, 0] # signal on canvas
+        else:
+            return [0, 1] # signal off canvas
+
+    def reset(self):
+        self.canvas = np.zeros((self.width, self.height, 1), np.uint8)
+
+    def display(self, t=5):
+        # cv2.imshow('bl', cv2.flip(self.canvas, 1))
+        cv2.imshow('bl', cv2.flip(cv2.transpose(self.canvas), 0))
+        cv2.waitKey(t*1000)
+        cv2.destroyAllWindows()
 
 env_state = EnvironmentState()
 env_state.step([
