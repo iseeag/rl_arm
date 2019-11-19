@@ -63,16 +63,32 @@ class Stepper(nn.Module):
         x = F.relu(self.fc1(x))
         return x
 
-predictor = Predictor()
-optimizer = optim.Adam(predictor.parameters())
-criterion = nn.MSELoss()
-for i in range(100000):
-    train_set = torch.rand(1000,20)
-    valid_set = torch.rand(1000,20)
+def pretrain_encoder_decoder(encoder, decoder):
+    class EncoderDecoder(nn.Module):
+        def __init__(self, encoder, decoder):
+            super(EncoderDecoder, self).__init__()
+            self.encoder = encoder
+            self.decoder = decoder
 
+        def forward(self, x):
+            x = encoder(x)
+            x = decoder(x)
+            return x
+
+    encoder_decoder = EncoderDecoder(encoder, decoder)
+    optimizer = optim.Adam(encoder_decoder.parameters())
+    criterion = nn.MSELoss()
+    for i in range(10000):
+        train_set = torch.rand(1000,20)
+        valid_set = torch.rand(1000,20)
+        optimizer.zero_grad()
+        loss = criterion(train_set, encoder_decoder(train_set))
+        loss.backward()
+        optimizer.step()
+        if i % 100 == 0:
+            print(f'epoch {i}: trn loss {loss.data:.6f}, '
+                  f'vld loss {criterion(valid_set, encoder_decoder(valid_set)):.6f}')
     optimizer.zero_grad()
-    loss = criterion(train_set, predictor(train_set))
-    loss.backward()
-    optimizer.step()
-    if i % 100 == 0:
-        print(f'epoch {i}: trn loss {loss.data:.6f}, vld loss {criterion(valid_set, predictor(valid_set)):.6f}')
+
+predictor = Predictor()
+pretrain_encoder_decoder(predictor.encoder, predictor.decoder)
