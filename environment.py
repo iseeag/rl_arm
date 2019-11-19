@@ -13,7 +13,7 @@ class EnvironmentState:
         self.space.damping = 0.9 # to slow down bodies
         # make arms
         self.root0 = (0,0)
-        self.arm0 = Arm(self.root0, 22)
+        self.arm0 = Arm(self.root0, 24)
         self.root1 = (0,24)
         self.arm1 = Arm(self.root1, 18)
         self.space.add(self.arm0.body,
@@ -25,7 +25,7 @@ class EnvironmentState:
         self.space.add(self.pj0)
         self.pj1 = pm.PivotJoint(self.arm1.body, self.arm0.body, self.root1)
         self.space.add(self.pj1)
-        self.spring_stiffness = 5
+        self.spring_stiffness = 10
         self.drs0 = pm.DampedRotarySpring(self.arm0.body, self.space.static_body, 0, 0, 1)
         self.space.add(self.drs0)
         self.drs1 = pm.DampedRotarySpring(self.arm1.body, self.arm0.body, 0, 0, 1)
@@ -37,8 +37,8 @@ class EnvironmentState:
         return self.arm0.info_dump(), self.arm1.info_dump(), self.canvas.canvas
 
     def draw(self, strength=1):
-        tip_coor = np.round(self.arm1.get_extend_coor()).astype(np.uint8)
-        return self.canvas.draw_point(tip_coor, strength)
+        x, y = np.round(self.arm1.get_extend_coor()).astype(np.uint8)
+        return self.canvas.draw_point((x, y), strength)
 
     def apply_torque_acw_1(self, torque=5):
         self.drs1.stiffness = self.spring_stiffness
@@ -82,8 +82,8 @@ class EnvironmentState:
             plt.pause(0.001)
 
     def newline(self, p1, p2):
-        plt.ylim(-30, 30)
-        plt.xlim(-30, 30)
+        plt.ylim(-50, 50)
+        plt.xlim(-50, 50)
         ax = plt.gca()
 
         xmin, xmax = ax.get_xbound()
@@ -140,12 +140,12 @@ class Canvas:
 
     def on_canvas(self, point):
         x, y = point[0], point[1]
-        return 0 <= x and x <= self.width and 0 <= y and y <= self.height
+        return 0 <= x and x <= self.width - 1 and 0 <= y and y <= self.height - 1
 
     def draw_point(self, point, strength):
         if self.on_canvas(point):
             s = self.canvas[point] + strength
-            self.canvas[point] = s if s < 255 else 255
+            self.canvas[point] = s if s >= self.canvas[point] else 255
             return [1, 0] # signal on canvas
         else:
             return [0, 1] # signal off canvas
@@ -163,7 +163,7 @@ env_state = EnvironmentState()
 env_state.step([
     # lambda: env_state.arm0.apply_torque_acw(200),
     # lambda: env_state.arm1.apply_pinch_cw(200),
-    lambda: env_state.apply_torque_cw_1(200),
-    lambda: env_state.apply_torque_cw_0(200),
+    lambda: env_state.apply_torque_cw_1(2000),
+    # lambda: env_state.apply_torque_cw_0(2000),
 ])
-env_state.loop_plot(5)
+env_state.loop_plot(2)
