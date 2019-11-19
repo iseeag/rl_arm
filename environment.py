@@ -15,11 +15,15 @@ class EnvironmentState:
         self.root0 = (0,0)
         self.arm0 = Arm(self.root0, 24)
         self.root1 = (0,24)
-        self.arm1 = Arm(self.root1, 18)
+        self.arm1 = Arm(self.root1, 16)
         self.space.add(self.arm0.body,
                        self.arm0.shape,
                        self.arm1.body,
                        self.arm1.shape)
+        # set torques
+        self.max_torque0 = self.arm0.body.moment
+        self.max_torque1 = self.arm1.body.moment * 3
+        self.instant_torques = None
         # join arms
         self.pj0 = pm.PivotJoint(self.arm0.body, self.space.static_body, self.root0)
         self.space.add(self.pj0)
@@ -34,7 +38,7 @@ class EnvironmentState:
         self.canvas = Canvas()
 
     def get_current_state(self):
-        return self.arm0.info_dump(), self.arm1.info_dump(), self.canvas.canvas
+        return self.arm0.info_dump(), self.arm1.info_dump(), self.instant_torques, self.canvas.canvas
 
     def draw(self, strength=1):
         x, y = np.round(self.arm1.get_extend_coor()).astype(np.uint8)
@@ -42,14 +46,14 @@ class EnvironmentState:
 
     def apply_torque_acw_1(self, torque=5):
         self.drs1.stiffness = self.spring_stiffness
-        self.drs1.rest_angle = self.arm1.body.angle - self.arm0.body.angle + torque/3.14
+        self.drs1.rest_angle = self.arm1.body.angle - self.arm0.body.angle + torque
 
     def apply_torque_cw_1(self, torque=5):
         self.apply_torque_acw_1(-torque)
 
     def apply_torque_acw_0(self, torque=5):
         self.drs0.stiffness = self.spring_stiffness
-        self.drs0.rest_angle = self.arm0.body.angle - self.space.static_body.angle + torque / 3.14
+        self.drs0.rest_angle = self.arm0.body.angle - self.space.static_body.angle + torque
 
     def apply_torque_cw_0(self, torque=5):
         self.apply_torque_acw_0(-torque)
@@ -58,8 +62,23 @@ class EnvironmentState:
         self.drs0.stiffness = 0
         self.drs1.stiffness = 0
 
-    def step(self, actions=None, ds=1/8):
-        if actions is None:
+    def step(self, actions=None, ds=1/8, random_movement=False):
+        assert(actions is None or not random_movement) # either or none but not both
+        if random_movement:
+            # apply previous torques
+            if self.instant_torques is not None:
+                self.apply_torque_cw_0(self.instant_torques[0])
+                self.apply_torque_cw_1(self.instant_torques[1])
+                self.instant_torques = None
+            # set torques for next step
+            m0, m1 = self.max_torque0, self.max_torque1
+            if np.random.randint(8) == 0:
+                self.instant_torques = [np.random.randint(0, m0), np.random.randint(0, m1)]
+
+            self.space.step(ds)
+            self.torque_reset()
+
+        elif actions is None:
             self.space.step(ds)
         else:
             for a in actions:
@@ -73,11 +92,11 @@ class EnvironmentState:
         self.newline(self.arm1.get_root_coor(), self.arm1.get_extend_coor())
         plt.show()
 
-    def loop_plot(self, t=10):
+    def loop_plot(self, t=10, random_movement=False):
         print(f'steps and loop for {t}s')
         t0 = time.time()
         while t0 + t > time.time():
-            self.step()
+            self.step(random_movement=random_movement)
             self.plot()
             plt.pause(0.001)
 
@@ -160,10 +179,13 @@ class Canvas:
         cv2.destroyAllWindows()
 
 env_state = EnvironmentState()
-env_state.step([
-    # lambda: env_state.arm0.apply_torque_acw(200),
-    # lambda: env_state.arm1.apply_pinch_cw(200),
-    lambda: env_state.apply_torque_cw_1(2000),
-    # lambda: env_state.apply_torque_cw_0(2000),
-])
-env_state.loop_plot(2)
+# env_state.step([
+#     # lambda: env_state.arm0.apply_torque_acw(200),
+#     # lambda: env_state.arm1.apply_pinch_cw(200),
+#     lambda: env_state.apply_torque_cw_1(2000),
+#     # lambda: env_state.apply_torque_cw_0(2000),
+# ])
+env_state.loop_plot(t=1000, random_movement=True)
+for i in range(100):
+    env_state.step(random_movement=True)
+    print(env_state.get_current_state()[0], env_state.get_current_state()[2])
