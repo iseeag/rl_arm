@@ -4,6 +4,15 @@ import torch.nn as nn
 import torch.nn.functional as F
 import math
 
+def get_n_params(model):
+    pp=0
+    for p in list(model.parameters()):
+        nn=1
+        for s in list(p.size()):
+            nn = nn*s
+        pp += nn
+    return pp
+
 class Predictor(nn.Module):
 
     def __init__(self, input_size):
@@ -11,6 +20,7 @@ class Predictor(nn.Module):
         self.encoder = Encoder(input_size)
         self.stepper = Stepper(self.encoder.out_size)
         self.decoder = Decoder(self.stepper.out_size, self.encoder.in_size)
+        self.parameter_size = get_n_params(self)
 
     def forward(self, x):
         x = self.encoder(x)
@@ -32,9 +42,10 @@ class Encoder(nn.Module):
         for i, fc in enumerate([nn.Linear(in_size, out_size) for in_size, out_size in self.sizes]):
             setattr(self, f'fc{i}', fc)
             self.fcs_list.append(f'fc{i}')
+        self.parameter_size = get_n_params(self)
 
     def forward(self, x):
-        for fc_name in self.fcs_list[:-1]:
+        for fc_name in self.fcs_list[:-1]: # skip relu for the last layer
             fc = getattr(self, fc_name)
             x = F.relu(fc(x))
         fc = getattr(self, self.fcs_list[-1])
@@ -55,9 +66,10 @@ class Decoder(nn.Module):
         for i, fc in enumerate([nn.Linear(in_size, out_size) for in_size, out_size in self.sizes]):
             setattr(self, f'fc{i}', fc)
             self.fcs_list.append(f'fc{i}')
+        self.parameter_size = get_n_params(self)
 
     def forward(self, x):
-        for fc_name in self.fcs_list[:-1]:
+        for fc_name in self.fcs_list[:-1]: # skip relu for the last layer
             fc = getattr(self, fc_name)
             x = F.relu(fc(x))
         fc = getattr(self, self.fcs_list[-1])
@@ -65,17 +77,24 @@ class Decoder(nn.Module):
         return x
 
 class Stepper(nn.Module):
-    def __init__(self, in_size, out_size=None, expand_ratio=2):
+    def __init__(self, in_size, out_size=None, expand_ratio=4, h_layer=1):
         super(Stepper, self).__init__()
         self.in_size = in_size
         self.out_size = in_size if out_size is None else out_size
-        self.mid_size = math.floor(in_size * expand_ratio)
-        self.fc0 = nn.Linear(self.in_size, self.mid_size)
-        self.fc1 = nn.Linear(self.mid_size, self.out_size)
+
+        sizes = [in_size] + [math.floor(in_size * expand_ratio)] * h_layer + [self.out_size]
+        self.sizes = [*zip(sizes[:-1], sizes[1:])]
+        self.fcs_list = []
+        # self.fc{i} = nn.Linear(in, out)
+        for i, fc in enumerate([nn.Linear(in_size, out_size) for in_size, out_size in self.sizes]):
+            setattr(self, f'fc{i}', fc)
+            self.fcs_list.append(f'fc{i}')
+        self.parameter_size = get_n_params(self)
 
     def forward(self, x):
-        x = F.relu(self.fc0(x))
-        x = F.relu(self.fc1(x))
+        for fc_name in self.fcs_list:
+            fc = getattr(self, fc_name)
+            x = F.relu(fc(x))
         return x
 
 def pretrain_encoder_decoder(encoder, decoder, epochs_size=600):
@@ -107,5 +126,5 @@ def pretrain_encoder_decoder(encoder, decoder, epochs_size=600):
     optimizer.zero_grad()
 
 if __name__ == '__main__':
-    predictor = Predictor(15)
+    predictor = Predictor(20)
     pretrain_encoder_decoder(predictor.encoder, predictor.decoder)
