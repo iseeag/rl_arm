@@ -21,18 +21,20 @@ class Predictor(nn.Module):
 
 class Encoder(nn.Module):
 
-    def __init__(self, in_size, compress_ratio=1.2):
+    def __init__(self, in_size, compress_ratio=1.2, n_layer=1):
         super(Encoder, self).__init__()
         self.in_size = in_size
         self.compress_ratio = compress_ratio
-        self.mid_size = math.floor(self.in_size * self.compress_ratio)
-        self.out_size = math.floor(self.mid_size * self.compress_ratio)
-        self.fc0 = nn.Linear(self.in_size, self.mid_size)
-        self.fc1 = nn.Linear(self.mid_size, self.out_size)
+
+        sizes = [math.floor(in_size * compress_ratio**i) for i in range(n_layer + 1)]
+        self.sizes = [*zip(sizes[:-1], sizes[1:])]
+        self.out_size = sizes[-1]
+        self.fcs = [nn.Linear(in_size, out_size) for in_size, out_size in self.sizes]
 
     def forward(self, x):
-        x = F.relu(self.fc0(x))
-        x = self.fc1(x)
+        for fc in self.fcs[:-1]:
+            x = F.relu(fc(x))
+        x = self.fcs[-1](x)
         return x
 
 class Decoder(nn.Module):
