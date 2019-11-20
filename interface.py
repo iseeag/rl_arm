@@ -1,7 +1,7 @@
 import numpy as np
 
 
-def transform_env_to_nn(d):
+def transform_state_env_to_nn(d):
     """
     environment state schema:
     {'arm0':
@@ -17,7 +17,7 @@ def transform_env_to_nn(d):
             'angle': float,
             'angular_velocity': float}
      'on_canvas': bool
-     'torques': [int, int]
+     'torques': [int, int] | None
      'canvas': np.array(uint8) -> 28 * 28 * 1
      'reachable_distance': int
      }
@@ -50,4 +50,4 @@ def transform_env_to_nn(d):
         arm0.x, arm0.y, v0[0], v0[1], end0[0], end0[1], angular_velocity0,
         arm1.x, arm1.y, v1[0], v1[1], end1[0], end1[1], angular_velocity1,
         on_canvas
-    ])
+    ], dtype=np.float32)
