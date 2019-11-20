@@ -6,14 +6,15 @@ import math
 
 class Predictor(nn.Module):
 
-    def __init__(self):
+    def __init__(self, input_size):
         super(Predictor, self).__init__()
-        self.encoder = Encoder(20)
+        self.encoder = Encoder(input_size)
         self.stepper = Stepper(self.encoder.out_size)
         self.decoder = Decoder(self.stepper.out_size, self.encoder.in_size)
 
     def forward(self, x):
         x = self.encoder(x)
+        x = self.stepper(x)
         x = self.decoder(x)
         return x
 
@@ -50,7 +51,7 @@ class Decoder(nn.Module):
         return x
 
 class Stepper(nn.Module):
-    def __init__(self, in_size, out_size=None, expand_ratio=1):
+    def __init__(self, in_size, out_size=None, expand_ratio=2):
         super(Stepper, self).__init__()
         self.in_size = in_size
         self.out_size = in_size if out_size is None else out_size
@@ -63,7 +64,7 @@ class Stepper(nn.Module):
         x = F.relu(self.fc1(x))
         return x
 
-def pretrain_encoder_decoder(encoder, decoder):
+def pretrain_encoder_decoder(encoder, decoder, epochs_size=5000):
     class EncoderDecoder(nn.Module):
         def __init__(self, encoder, decoder):
             super(EncoderDecoder, self).__init__()
@@ -78,9 +79,10 @@ def pretrain_encoder_decoder(encoder, decoder):
     encoder_decoder = EncoderDecoder(encoder, decoder)
     optimizer = optim.Adam(encoder_decoder.parameters())
     criterion = nn.MSELoss()
-    for i in range(10000):
-        train_set = torch.rand(1000,20)
-        valid_set = torch.rand(1000,20)
+    in_size = encoder_decoder.encoder.in_size
+    for i in range(epochs_size):
+        train_set = -1 + torch.rand(1000, in_size) * 2
+        valid_set = -1 + torch.rand(1000, in_size) * 2
         optimizer.zero_grad()
         loss = criterion(train_set, encoder_decoder(train_set))
         loss.backward()
@@ -90,5 +92,6 @@ def pretrain_encoder_decoder(encoder, decoder):
                   f'vld loss {criterion(valid_set, encoder_decoder(valid_set)):.6f}')
     optimizer.zero_grad()
 
-predictor = Predictor()
-pretrain_encoder_decoder(predictor.encoder, predictor.decoder)
+if __name__ == '__main__':
+    predictor = Predictor(15)
+    pretrain_encoder_decoder(predictor.encoder, predictor.decoder)
