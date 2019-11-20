@@ -25,31 +25,43 @@ class Encoder(nn.Module):
         super(Encoder, self).__init__()
         self.in_size = in_size
         self.compress_ratio = compress_ratio
-
         sizes = [math.floor(in_size * compress_ratio**i) for i in range(n_layer + 1)]
         self.sizes = [*zip(sizes[:-1], sizes[1:])]
         self.out_size = sizes[-1]
-        self.fcs = [nn.Linear(in_size, out_size) for in_size, out_size in self.sizes]
+        self.fcs_list = []
+        for i, fc in enumerate([nn.Linear(in_size, out_size) for in_size, out_size in self.sizes]):
+            setattr(self, f'fc{i}', fc)
+            self.fcs_list.append(f'fc{i}')
 
     def forward(self, x):
-        for fc in self.fcs[:-1]:
+        for fc_name in self.fcs_list[:-1]:
+            fc = getattr(self, fc_name)
             x = F.relu(fc(x))
-        x = self.fcs[-1](x)
+        fc = getattr(self, self.fcs_list[-1])
+        x = fc(x)
         return x
 
 class Decoder(nn.Module):
-    def __init__(self, in_size, out_size, compress_ratio=1.2):
+    def __init__(self, in_size, out_size, compress_ratio=1.2, n_layer=1):
         super(Decoder, self).__init__()
         self.in_size = in_size
         self.out_size = out_size
         self.compress_ratio = compress_ratio
-        self.mid_size = math.floor(self.in_size * self.compress_ratio)
-        self.fc0 = nn.Linear(self.in_size, self.mid_size)
-        self.fc1 = nn.Linear(self.mid_size, self.out_size)
+
+        sizes = [math.floor(in_size + (out_size - in_size) * i / n_layer) for i in range(n_layer + 1)]
+        assert(sizes[0] == in_size and sizes[-1] == out_size)
+        self.sizes = [*zip(sizes[:-1], sizes[1:])]
+        self.fcs_list = []
+        for i, fc in enumerate([nn.Linear(in_size, out_size) for in_size, out_size in self.sizes]):
+            setattr(self, f'fc{i}', fc)
+            self.fcs_list.append(f'fc{i}')
 
     def forward(self, x):
-        x = F.relu(self.fc0(x))
-        x = self.fc1(x)
+        for fc_name in self.fcs_list[:-1]:
+            fc = getattr(self, fc_name)
+            x = F.relu(fc(x))
+        fc = getattr(self, self.fcs_list[-1])
+        x = fc(x)
         return x
 
 class Stepper(nn.Module):
@@ -66,7 +78,7 @@ class Stepper(nn.Module):
         x = F.relu(self.fc1(x))
         return x
 
-def pretrain_encoder_decoder(encoder, decoder, epochs_size=5000):
+def pretrain_encoder_decoder(encoder, decoder, epochs_size=600):
     class EncoderDecoder(nn.Module):
         def __init__(self, encoder, decoder):
             super(EncoderDecoder, self).__init__()
