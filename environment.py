@@ -76,21 +76,23 @@ class EnvironmentState:
 
     def step(self, actions=None, ds=1/8, random_movement=False):
         assert(actions is None or not random_movement) # either or none but not both
+        # apply previous torques
+        if self.instant_torques is not None:
+            self.apply_torque_cw_0(self.instant_torques[0])
+            self.apply_torque_cw_1(self.instant_torques[1])
+            self.instant_torques = None
+
         if random_movement:
-            # apply previous torques
-            if self.instant_torques is not None:
-                self.apply_torque_cw_0(self.instant_torques[0])
-                self.apply_torque_cw_1(self.instant_torques[1])
-                self.instant_torques = None
             # set torques for next step
             if np.random.randint(8) == 0:
                 self.torque_random_set()
-
             self.space.step(ds)
             self.torque_reset()
 
         elif actions is None:
             self.space.step(ds)
+            self.torque_reset()
+
         else:
             for a in actions:
                 a()
