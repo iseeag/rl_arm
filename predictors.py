@@ -4,6 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import math
 
+
 def get_n_params(model):
     pp=0
     for p in list(model.parameters()):
@@ -15,18 +16,33 @@ def get_n_params(model):
 
 class Predictor(nn.Module):
 
-    def __init__(self, input_size):
+    def __init__(self, input_size, output_size):
         super(Predictor, self).__init__()
         self.encoder = Encoder(input_size)
         self.stepper = Stepper(self.encoder.out_size)
-        self.decoder = Decoder(self.stepper.out_size, self.encoder.in_size)
+        self.decoder = Decoder(self.stepper.out_size, output_size)
         self.parameter_size = get_n_params(self)
+        print(f'n_parameters: {self.parameter_size}')
+
+        self.optimizer = optim.Adam(self.parameters())
+        self.criterion = nn.MSELoss()
 
     def forward(self, x):
         x = self.encoder(x)
         x = self.stepper(x)
         x = self.decoder(x)
         return x
+
+    def optimize(self, x, y):
+        self.optimizer.zero_grad()
+        result = self(x)
+        loss = self.criterion(result, y)
+        loss.backward()
+        self.optimizer.step()
+
+        return result, loss.data
+
+
 
 
 class Encoder(nn.Module):
@@ -77,11 +93,11 @@ class Decoder(nn.Module):
         return x
 
 class Stepper(nn.Module):
-    def __init__(self, in_size, out_size=None, expand_ratio=4, h_layer=1):
+    def __init__(self, in_size, out_size=None, expand_ratio=10, h_layer=1, recurrent_step=0):
         super(Stepper, self).__init__()
+        self.recurrent_step = recurrent_step
         self.in_size = in_size
         self.out_size = in_size if out_size is None else out_size
-
         sizes = [in_size] + [math.floor(in_size * expand_ratio)] * h_layer + [self.out_size]
         self.sizes = [*zip(sizes[:-1], sizes[1:])]
         self.fcs_list = []
@@ -92,9 +108,10 @@ class Stepper(nn.Module):
         self.parameter_size = get_n_params(self)
 
     def forward(self, x):
-        for fc_name in self.fcs_list:
-            fc = getattr(self, fc_name)
-            x = F.relu(fc(x))
+        for _ in range(self.recurrent_step + 1):
+            for fc_name in self.fcs_list:
+                fc = getattr(self, fc_name)
+                x = F.relu(fc(x))
         return x
 
 def pretrain_encoder_decoder(encoder, decoder, epochs_size=600):
@@ -126,5 +143,5 @@ def pretrain_encoder_decoder(encoder, decoder, epochs_size=600):
     optimizer.zero_grad()
 
 if __name__ == '__main__':
-    predictor = Predictor(20)
+    predictor = Predictor(20, 20)
     pretrain_encoder_decoder(predictor.encoder, predictor.decoder)
