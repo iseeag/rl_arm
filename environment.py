@@ -1,10 +1,10 @@
 import pymunk as pm
 from pymunk import Vec2d
-import matplotlib.pyplot as plt
-import matplotlib.lines as mlines
 import time
 import numpy as np
 import cv2
+import matplotlib.pyplot as plt
+import matplotlib.lines as mlines
 
 
 class EnvironmentState:
@@ -38,7 +38,15 @@ class EnvironmentState:
         self.canvas = Canvas()
 
     def get_current_state(self):
-        return self.arm0.info_dump(), self.arm1.info_dump(), self.instant_torques, self.canvas.canvas
+        return {'arm0': self.arm0.info_dump(),
+                'arm1': self.arm1.info_dump(),
+                'on_canvas': self.canvas.on_canvas(self.arm1.get_extend_coor()),
+                'torques': self.instant_torques,
+                'max_torques': [self.max_torque0, self.max_torque1],
+                'canvas': self.canvas.canvas,
+                'reachable_distance': self.arm0.length + self.arm1.length,
+                'energy': (self.arm0.body.kinetic_energy, self.arm1.body.kinetic_energy)
+                }
 
     def draw(self, strength=1):
         x, y = np.round(self.arm1.get_extend_coor()).astype(np.uint8)
@@ -58,6 +66,10 @@ class EnvironmentState:
     def apply_torque_cw_0(self, torque=5):
         self.apply_torque_acw_0(-torque)
 
+    def torque_random_set(self):
+        m0, m1 = self.max_torque0, self.max_torque1
+        self.instant_torques = [np.random.randint(-m0, m0), np.random.randint(-m1, m1)]
+
     def torque_reset(self):
         self.drs0.stiffness = 0
         self.drs1.stiffness = 0
@@ -71,9 +83,8 @@ class EnvironmentState:
                 self.apply_torque_cw_1(self.instant_torques[1])
                 self.instant_torques = None
             # set torques for next step
-            m0, m1 = self.max_torque0, self.max_torque1
             if np.random.randint(8) == 0:
-                self.instant_torques = [np.random.randint(0, m0), np.random.randint(0, m1)]
+                self.torque_random_set()
 
             self.space.step(ds)
             self.torque_reset()
@@ -138,11 +149,11 @@ class Arm:
         return self.body.local_to_world((0, self.length/2))
 
     def info_dump(self):
-        return (self.body.local_to_world((0, -self.length/2)),
-                self.body.local_to_world((0, self.length/2)),
-                self.body.velocity,
-                self.body.angle,
-                self.body.angular_velocity)
+        return {'root': self.body.local_to_world((0, -self.length/2)),
+                'end': self.body.local_to_world((0, self.length/2)),
+                'velocity': self.body.velocity,
+                'angle': self.body.angle,
+                'angular_velocity': self.body.angular_velocity}
 
     def apply_pinch_cw(self, torque=5):
         self.body.apply_force_at_local_point((torque, 0), (0, -self.length/2+1))
@@ -178,14 +189,17 @@ class Canvas:
         cv2.waitKey(t*1000)
         cv2.destroyAllWindows()
 
-env_state = EnvironmentState()
-# env_state.step([
-#     # lambda: env_state.arm0.apply_torque_acw(200),
-#     # lambda: env_state.arm1.apply_pinch_cw(200),
-#     lambda: env_state.apply_torque_cw_1(2000),
-#     # lambda: env_state.apply_torque_cw_0(2000),
-# ])
-env_state.loop_plot(t=1000, random_movement=True)
-for i in range(100):
-    env_state.step(random_movement=True)
-    print(env_state.get_current_state()[0], env_state.get_current_state()[2])
+if __name__ == '__main__':
+    env_state = EnvironmentState()
+    # env_state.step([
+    #     # lambda: env_state.arm0.apply_torque_acw(200),
+    #     # lambda: env_state.arm1.apply_pinch_cw(200),
+    #     lambda: env_state.apply_torque_cw_1(2000),
+    #     # lambda: env_state.apply_torque_cw_0(2000),
+    # ])
+    env_state.loop_plot(t=1000, random_movement=True)
+    for i in range(10):
+        env_state.step(random_movement=True)
+        print(env_state.get_current_state()[1], env_state.get_current_state()[2])
+
+    s = env_state.get_current_state()
