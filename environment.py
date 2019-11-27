@@ -74,15 +74,15 @@ class EnvironmentState:
         self.drs0.stiffness = 0
         self.drs1.stiffness = 0
 
-    def step(self, actions=None, ds=1/8, random_movement=False):
-        assert(actions is None or not random_movement) # either or none but not both
+    def step(self, actions=None, ds=1/8, random_torque=False):
+        assert(actions is None or not random_torque) # either or none but not both
         # apply previous torques
         if self.instant_torques is not None:
             self.apply_torque_cw_0(self.instant_torques[0])
             self.apply_torque_cw_1(self.instant_torques[1])
             self.instant_torques = None
 
-        if random_movement:
+        if random_torque:
             # set torques for next step
             if np.random.randint(8) == 0:
                 self.torque_random_set()
@@ -105,11 +105,11 @@ class EnvironmentState:
         self.newline(self.arm1.get_root_coor(), self.arm1.get_extend_coor())
         plt.show()
 
-    def loop_plot(self, t=10, random_movement=False):
+    def loop_plot(self, t=10, random_torque=False):
         print(f'steps and loop for {t}s')
         t0 = time.time()
         while t0 + t > time.time():
-            self.step(random_movement=random_movement)
+            self.step(random_torque=random_torque)
             self.plot()
             plt.pause(0.001)
 
@@ -199,9 +199,9 @@ if __name__ == '__main__':
     #     lambda: env_state.apply_torque_cw_1(2000),
     #     # lambda: env_state.apply_torque_cw_0(2000),
     # ])
-    env_state.loop_plot(t=1000, random_movement=True)
+    env_state.loop_plot(t=1000, random_torque=True)
     for i in range(10):
-        env_state.step(random_movement=True)
+        env_state.step(random_torque=True)
         print(env_state.get_current_state()[1], env_state.get_current_state()[2])
 
     s = env_state.get_current_state()
