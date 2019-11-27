@@ -70,6 +70,10 @@ class EnvironmentState:
         m0, m1 = self.max_torque0, self.max_torque1
         self.instant_torques = [np.random.randint(-m0, m0), np.random.randint(-m1, m1)]
 
+    def torque_scaled_set(self, t0, t1):
+        m0, m1 = self.max_torque0, self.max_torque1
+        self.instant_torques = [m0 * t0, m1 * t1]
+
     def torque_reset(self):
         self.drs0.stiffness = 0
         self.drs1.stiffness = 0
