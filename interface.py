@@ -72,14 +72,17 @@ def make_transfrom_f(include_torque=True):
 
 
 class StateDataset(Dataset):
-    def __init__(self, env_instance: EnvironmentState, transform_f,
-                 size=3500000, skip_step=0, random_torque=True, remove_torque=False):
+
+    def __init__(self, env_instance: EnvironmentState, transform_f=None,
+                 size=3500000, skip_step=0, random_torque=True, remove_torque=False, include_torque=True):
         self.size = size
         self.skip_step = skip_step
         self.env = env_instance
-        self.transform_f = transform_f
+        self.transform_f = make_transfrom_f(include_torque=include_torque) if transform_f is None else transform_f
+        self.output_size = len(transform_f(self.env.get_current_state()))
         self.random_torque = random_torque
         self.remove_torque = remove_torque
+        self.include_torque = include_torque
         # initiate environment
         for _ in range(20):
             self.env.step(random_torque=True)
@@ -97,9 +100,14 @@ class StateDataset(Dataset):
         for i in range(self.skip_step):
             self.env.step()
 
-        self.env.step(random_torque=False) # random movement when not include torques
+        self.env.step(random_torque=False)
         s1 = self.env.get_current_state()
 
         return {'s0': self.transform_f(s0),
                 's1': self.transform_f(s1)}
+
+    def set_torque(self, t0, t1):
+        self.env.torque_scaled_set(t0, t1)
+
+
 
