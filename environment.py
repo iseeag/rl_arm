@@ -107,6 +107,7 @@ class EnvironmentState:
         plt.cla()
         self.newline(self.arm0.get_root_coor(), self.arm0.get_extend_coor())
         self.newline(self.arm1.get_root_coor(), self.arm1.get_extend_coor())
+        self.new_dots(self.arm0.get_root_coor(), self.arm0.get_extend_coor(), self.arm1.get_extend_coor())
         plt.show()
 
     def loop_plot(self, t=10, random_torque=False):
@@ -120,20 +121,11 @@ class EnvironmentState:
     def newline(self, p1, p2):
         plt.ylim(-50, 50)
         plt.xlim(-50, 50)
-        ax = plt.gca()
+        plt.plot([p1[0], p2[0]], [p1[1], p2[1]], 'b')
 
-        xmin, xmax = ax.get_xbound()
 
-        if (p2[0] == p1[0]):
-            xmin = xmax = p1[0]
-            ymin, ymax = ax.get_ybound()
-        else:
-            ymax = p1[1] + (p2[1] - p1[1]) / (p2[0] - p1[0]) * (xmax - p1[0])
-            ymin = p1[1] + (p2[1] - p1[1]) / (p2[0] - p1[0]) * (xmin - p1[0])
-
-        l = mlines.Line2D([xmin, xmax], [ymin, ymax])
-        ax.add_line(l)
-        plt.plot([p1[0], p2[0]], [p1[1], p2[1]], 'ro')
+    def new_dots(self, *point):
+        plt.plot([p[0] for p in point], [p[1] for p in point], 'ro')
 
     def reset(self):
         ...
