@@ -6,6 +6,7 @@ logs/
 ckpt/
 .DS_Store
 diary.txt
+saved_models
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
