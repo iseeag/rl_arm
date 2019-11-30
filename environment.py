@@ -4,7 +4,6 @@ import time
 import numpy as np
 import cv2
 import matplotlib.pyplot as plt
-import matplotlib.lines as mlines
 
 
 class EnvironmentState:
@@ -36,6 +35,11 @@ class EnvironmentState:
         self.space.add(self.drs1)
         # canvas 28 * 28
         self.canvas = Canvas()
+        self.cache_point_g = None
+        self.cache_point_b = None
+        self.cache_point_m = None
+        self.cache_point_y = None
+        self.cache_point_r = None
 
     def get_current_state(self):
         return {'arm0': self.arm0.info_dump(),
@@ -107,8 +111,13 @@ class EnvironmentState:
         plt.cla()
         self.newline(self.arm0.get_root_coor(), self.arm0.get_extend_coor())
         self.newline(self.arm1.get_root_coor(), self.arm1.get_extend_coor())
-        self.new_dots(self.arm0.get_root_coor(), self.arm0.get_extend_coor(), self.arm1.get_extend_coor())
+        self.new_dots(self.arm0.get_root_coor(),
+                      self.arm0.get_extend_coor(),
+                      self.arm1.get_extend_coor())
+        self.draw_color_dot()
+
         plt.show()
+        plt.pause(0.001)
 
     def loop_plot(self, t=10, random_torque=False):
         print(f'steps and loop for {t}s')
@@ -116,7 +125,7 @@ class EnvironmentState:
         while t0 + t > time.time():
             self.step(random_torque=random_torque)
             self.plot()
-            plt.pause(0.001)
+            # plt.pause(0.001)
 
     def newline(self, p1, p2):
         plt.ylim(-50, 50)
@@ -124,8 +133,31 @@ class EnvironmentState:
         plt.plot([p1[0], p2[0]], [p1[1], p2[1]], 'b')
 
 
-    def new_dots(self, *point):
-        plt.plot([p[0] for p in point], [p[1] for p in point], 'ro')
+    def new_dots(self, *point, color='r'):
+        plt.plot([p[0] for p in point], [p[1] for p in point], f'{color}o')
+
+    def draw_color_dot(self):
+        for p, c in [(self.cache_point_g, 'g'),
+                     (self.cache_point_y, 'y'),
+                     (self.cache_point_m, 'm'),
+                     (self.cache_point_b, 'b'),
+                     (self.cache_point_r, 'r')]:
+            if p is not None: self.new_dots(p, color=c)
+
+    def green_dot(self, point):
+        self.cache_point_g = point
+
+    def red_dot(self, point):
+        self.cache_point_r = point
+
+    def blue_dot(self, point):
+        self.cache_point_b = point
+
+    def yellow_dot(self, point):
+        self.cache_point_y = point
+
+    def magenta_dot(self, point):
+        self.cache_point_m = point
 
     def reset(self):
         ...
