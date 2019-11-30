@@ -1,6 +1,7 @@
 import numpy as np
 from environment import EnvironmentState
 from torch.utils.data import Dataset
+import torch
 
 def make_transfrom_f(include_torque=True):
     """
@@ -31,11 +32,11 @@ def make_transfrom_f(include_torque=True):
         v0: center velocity vector
         end: end position normalized by reachable_distance
 
-        arm0.x, arm0.y, v0.x, v0.y, end0.x, end0.y, angular_velocity0,
-        arm1.x, arm1.y, v1.x, v1.y, end1.x, end1.y, angular_velocity1,
+        arm0.x, arm0.y, v0.x, v0.y, end0.x, end0.y, angular_velocity0, torque0[optional],
+        arm1.x, arm1.y, v1.x, v1.y, end1.x, end1.y, angular_velocity1, torque1[optional],
         on_canvas
         [float, float, float, float, float, float, float, float, float, float, float]
-        all input scaled to [-1, 1] with tanh
+        all input scaled to [-1, 1] with tanh except end[0,1].[x,y]
         """
     def transform_env_state_to_nn_state(d, include_torque):
         # arm0
@@ -68,21 +69,24 @@ def make_transfrom_f(include_torque=True):
                 on_canvas
             ], dtype=np.float32)
 
-    return lambda d: transform_env_state_to_nn_state(d, include_torque)
+    return lambda d: torch.tensor(transform_env_state_to_nn_state(d, include_torque))
+
+def remove_torque(x: torch.Tensor):
+    return torch.cat((x.narrow(-1, 0, 7), x.narrow(-1, 8, 7), x.narrow(-1, 16, 1)))
 
 
 class StateDataset(Dataset):
 
-    def __init__(self, env_instance: EnvironmentState, transform_f=None,
-                 size=3500000, skip_step=0, random_torque=True, remove_torque=False, include_torque=True):
+    def __init__(self, env_instance: EnvironmentState, size=3500000, skip_step=0,
+                 random_torque=True, remove_torque=False):
         self.size = size
         self.skip_step = skip_step
         self.env = env_instance
-        self.transform_f = make_transfrom_f(include_torque=include_torque) if transform_f is None else transform_f
-        self.output_size = len(transform_f(self.env.get_current_state()))
+        self.transform_f = make_transfrom_f(include_torque=True)
+        self.output_size = len(self.transform_f(self.env.get_current_state()))
+        self.output_size_for_actor = self.output_size - 2
         self.random_torque = random_torque
         self.remove_torque = remove_torque
-        self.include_torque = include_torque
         # initiate environment
         for _ in range(20):
             self.env.step(random_torque=True)
@@ -94,6 +98,8 @@ class StateDataset(Dataset):
         # set random torque
         if self.random_torque:
             self.env.torque_random_set() # set torque
+            # self.env.step()
+            # self.env.torque_random_set()
         if self.remove_torque:
             self.env.step() # get rid of torque
         s0 = self.env.get_current_state()
