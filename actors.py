@@ -1,4 +1,4 @@
-from utils import get_nn_params
+from utils import get_nn_params, OptimizerContext
 from interface import remove_torque
 import torch.nn as nn
 import torch.optim as optim
@@ -18,6 +18,7 @@ class Actor(nn.Module):
         print(f'number of parameters: {get_nn_params(self)}')
 
         self.optimizer = optim.Adam(self.parameters())
+        self.optim_cont = OptimizerContext(self.optimizer)
         self.critic = critic
 
     def forward(self, x):
@@ -27,15 +28,9 @@ class Actor(nn.Module):
         x = torch.tanh(self.fc2(x)) # todo: better activation function?
         return x
 
-    def optimize(self, x):
-        assert self.critic is not None
-        self.optimizer.zero_grad()
-        actions = self(x)
-        reward = -self.critic(x, actions)
-        reward.backward()
-        self.optimizer.step()
 
-        return actions, reward
+    def optimize(self):
+        return self.optim_cont
 
     def save(self, name):
         torch.save(self.state_dict(), f'{self.save_path}/{name}')
