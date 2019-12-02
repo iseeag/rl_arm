@@ -1,5 +1,6 @@
 import time
 import numpy as np
+import torch.optim.optimizer
 
 def get_nn_params(model):
     pp=0
@@ -47,3 +48,12 @@ class AverageMeter:
     def std(self):
         return self.array.std()
 
+class OptimizerContext:
+    def __init__(self, optimizer: torch.optim.Adam):
+        self.optimizer = optimizer
+
+    def __enter__(self):
+        self.optimizer.zero_grad()
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.optimizer.step()
