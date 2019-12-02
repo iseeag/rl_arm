@@ -21,7 +21,7 @@ class EnvironmentState:
                        self.arm1.shape)
         # set torques
         self.max_torque0 = self.arm0.body.moment
-        self.max_torque1 = self.arm1.body.moment * 3
+        self.max_torque1 = self.arm1.body.moment * 2
         self.instant_torques = None
         # join arms
         self.pj0 = pm.PivotJoint(self.arm0.body, self.space.static_body, self.root0)
@@ -81,6 +81,11 @@ class EnvironmentState:
     def torque_reset(self):
         self.drs0.stiffness = 0
         self.drs1.stiffness = 0
+
+    def randomise(self):
+        self.arm0.body.angle = (1 - 2 * np.random.rand()) * 6.28
+        self.arm1.body.angle = (1 - 2 * np.random.rand()) * 6.28
+        for _ in range(500): self.step()
 
     def step(self, actions=None, ds=1/8, random_torque=False):
         assert(actions is None or not random_torque) # either or none but not both
@@ -142,7 +147,7 @@ class EnvironmentState:
                      (self.cache_point_m, 'm'),
                      (self.cache_point_b, 'b'),
                      (self.cache_point_r, 'r')]:
-            if p is not None: self.new_dots(p, color=c)
+            if p is not None: self.new_dots(*p, color=c)
 
     def green_dot(self, point):
         self.cache_point_g = point
@@ -160,7 +165,7 @@ class EnvironmentState:
         self.cache_point_m = point
 
     def reset(self):
-        ...
+        self = EnvironmentState()
 
 class Arm:
     def __init__(self, pivot_coor, length, angle=0):
