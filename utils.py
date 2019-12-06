@@ -1,6 +1,10 @@
+import typing
 import time
 import numpy as np
-import torch.optim.optimizer
+from torch import optim
+from functools import wraps
+import torch.nn as nn
+import torch
 
 def get_nn_params(model):
     pp=0
@@ -26,6 +30,9 @@ class Timer:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         print(f'time used: {time.time() - self.time_stamp:.2f}s')
+
+    def time_used(self):
+        return f'{time.time() - self.time_stamp:.2f}s'
 
 
 class AverageMeter:
@@ -57,3 +64,30 @@ class OptimizerContext:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.optimizer.step()
+
+
+def add_save_load_optimize_optimizer_optim_context(cls, instance):
+
+    instance.optimizer = optim.Adam(instance.parameters())
+    instance.optim_cont = OptimizerContext(instance.optimizer)
+
+    def save(self, name):
+        torch.save(self.state_dict(), f'{self.save_path}/{name}')
+        print(f'{self.save_path}/{name} saved')
+
+    setattr(cls, 'save', save)
+
+
+    def load(self, name):
+        self.load_state_dict(torch.load(f'{self.save_path}/{name}'))
+        self.eval()
+        print('load successful')
+        return True
+
+    setattr(cls, 'load', load)
+
+
+    def optimize_c(self):
+        return self.optim_cont
+
+    setattr(cls, 'optimize_c', optimize_c)
