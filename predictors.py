@@ -1,27 +1,19 @@
+from utils import get_nn_params
 import torch
 import torch.optim as optim
 import torch.nn as nn
 import torch.nn.functional as F
 import math
 
-
-def get_n_params(model):
-    pp=0
-    for p in list(model.parameters()):
-        nn=1
-        for s in list(p.size()):
-            nn = nn*s
-        pp += nn
-    return pp
-
 class Predictor(nn.Module):
 
     def __init__(self, input_size, output_size):
         super(Predictor, self).__init__()
+        self.save_path = 'saved_models'
         self.encoder = Encoder(input_size)
         self.stepper = Stepper(self.encoder.out_size)
         self.decoder = Decoder(self.stepper.out_size, output_size)
-        self.parameter_size = get_n_params(self)
+        self.parameter_size = get_nn_params(self)
         print(f'n_parameters: {self.parameter_size}')
 
         self.optimizer = optim.Adam(self.parameters())
@@ -34,16 +26,21 @@ class Predictor(nn.Module):
         return x
 
     def optimize(self, x, y):
+        results = self(x)
+        loss = self.criterion(results, y)
         self.optimizer.zero_grad()
-        result = self(x)
-        loss = self.criterion(result, y)
         loss.backward()
         self.optimizer.step()
+        return results, loss.data
 
-        return result, loss.data
+    def save(self, name):
+        torch.save(self.state_dict(), f'{self.save_path}/{name}')
 
-
-
+    def load(self, name):
+        self.load_state_dict(torch.load(f'{self.save_path}/{name}'))
+        self.eval()
+        print('load successful')
+        return True
 
 class Encoder(nn.Module):
 
@@ -58,7 +55,7 @@ class Encoder(nn.Module):
         for i, fc in enumerate([nn.Linear(in_size, out_size) for in_size, out_size in self.sizes]):
             setattr(self, f'fc{i}', fc)
             self.fcs_list.append(f'fc{i}')
-        self.parameter_size = get_n_params(self)
+        self.parameter_size = get_nn_params(self)
 
     def forward(self, x):
         for fc_name in self.fcs_list[:-1]: # skip relu for the last layer
@@ -82,7 +79,7 @@ class Decoder(nn.Module):
         for i, fc in enumerate([nn.Linear(in_size, out_size) for in_size, out_size in self.sizes]):
             setattr(self, f'fc{i}', fc)
             self.fcs_list.append(f'fc{i}')
-        self.parameter_size = get_n_params(self)
+        self.parameter_size = get_nn_params(self)
 
     def forward(self, x):
         for fc_name in self.fcs_list[:-1]: # skip relu for the last layer
@@ -105,7 +102,7 @@ class Stepper(nn.Module):
         for i, fc in enumerate([nn.Linear(in_size, out_size) for in_size, out_size in self.sizes]):
             setattr(self, f'fc{i}', fc)
             self.fcs_list.append(f'fc{i}')
-        self.parameter_size = get_n_params(self)
+        self.parameter_size = get_nn_params(self)
 
     def forward(self, x):
         for _ in range(self.recurrent_step + 1):
