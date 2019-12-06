@@ -1,4 +1,5 @@
-from utils import get_nn_params, OptimizerContext
+import typing
+from utils import get_nn_params, OptimizerContext, add_save_load_optimize_optimizer_optim_context
 from interface import remove_torque
 import torch.nn as nn
 import torch.optim as optim
@@ -17,9 +18,11 @@ class Actor(nn.Module):
         self.fc2 = nn.Linear(input_size*5, output_size)
         print(f'number of parameters: {get_nn_params(self)}')
 
-        self.optimizer = optim.Adam(self.parameters())
-        self.optim_cont = OptimizerContext(self.optimizer)
+        add_save_load_optimize_optimizer_optim_context(Actor, self)
         self.critic = critic
+
+    def __call__(self, *input, **kwargs) -> typing.Any:
+        return super().__call__(*input, **kwargs)
 
     def forward(self, x):
         x = remove_torque(x)
@@ -27,19 +30,6 @@ class Actor(nn.Module):
         x = F.relu(self.fc1(x))
         x = torch.tanh(self.fc2(x)) # todo: better activation function?
         return x
-
-    def optimize_c(self):
-        return self.optim_cont
-
-    def save(self, name):
-        torch.save(self.state_dict(), f'{self.save_path}/{name}')
-        print(f'{self.save_path}/{name} saved')
-
-    def load(self, name):
-        self.load_state_dict(torch.load(f'{self.save_path}/{name}'))
-        self.eval()
-        print('load successful')
-        return True
 
 
 class ActorP(nn.Module):
@@ -55,9 +45,10 @@ class ActorP(nn.Module):
             self.fc_list.append(f'fc{i}')
         print(f'number of parameters: {get_nn_params(self)}')
 
-        self.optimizer = optim.Adam(self.parameters())
-        self.optim_cont = OptimizerContext(self.optimizer)
+        add_save_load_optimize_optimizer_optim_context(ActorP, self)
 
+    def __call__(self, *input, **kwargs) -> typing.Any:
+        return super().__call__(*input, **kwargs)
 
     def forward(self, x):
         x = remove_torque(x)
@@ -69,15 +60,3 @@ class ActorP(nn.Module):
 
         return x
 
-    def optimize_c(self):
-        return self.optim_cont
-
-    def save(self, name):
-        torch.save(self.state_dict(), f'{self.save_path}/{name}')
-        print(f'{self.save_path}/{name} saved')
-
-    def load(self, name):
-        self.load_state_dict(torch.load(f'{self.save_path}/{name}'))
-        self.eval()
-        print('load successful')
-        return True
