@@ -17,20 +17,21 @@ class PredictorLSTM(nn.Module):
         self.seq_len = seq_len
         self.n_layer = n_layer
         self.base_rnn = base_rnn
+
+        self.encoder0 = Encoder(input_size, compress_ratio=expand_ratio * n_layer) # for h_0
         if base_rnn == 'lstm':
-            self.encoder0 = Encoder(input_size, compress_ratio=expand_ratio * n_layer)
-            self.encoder1 = Encoder(input_size, compress_ratio=expand_ratio * n_layer)
+            self.encoder1 = Encoder(input_size, compress_ratio=expand_ratio * n_layer) # for c_0
             self.rnn = nn.LSTM(1, self.encoder0.out_size // n_layer, n_layer, batch_first=True)
         elif base_rnn == 'gru':
-            self.encoder0 = Encoder(input_size, compress_ratio=expand_ratio * n_layer)
             self.rnn = nn.GRU(1, self.encoder0.out_size // n_layer, n_layer, batch_first=True)
+        elif base_rnn == 'rnn':
+            self.rnn = nn.RNN(1, self.encoder0.out_size // n_layer, n_layer, batch_first=True)
         else:
             raise(AttributeError('unknown base rnn in PredictorLSTM'))
 
         assert self.encoder0.out_size // n_layer == self.encoder0.out_size / n_layer  # sanity check
         self.decoder = Decoder(self.encoder0.out_size // n_layer, output_size)
 
-        # self.rnn = nn.RNN
         self.parameter_size = get_nn_params(self)
         print(f'n_parameters: {self.parameter_size}')
 
@@ -39,21 +40,20 @@ class PredictorLSTM(nn.Module):
     def __call__(self, *input, **kwargs) -> typing.Any:
         return super().__call__(*input, **kwargs)
 
-    def forward(self, x): # x::[batch, feature_len]
+    def forward(self, x): # x, shape (batch, input_size)
         batch_size, input_size = x.shape
-
-        input = torch.zeros(batch_size, self.seq_len, 1)
+        input = torch.zeros(batch_size, self.seq_len, 1) # shape: (batch_size, seq_len, input_size)
 
         h_size = self.rnn.hidden_size
-        h_0 = self.encoder0(x)  # h_0
+        h_0 = self.encoder0(x)  # h_0, shape: (num_layers * num_directions, batch_size, hidden_size)
         h_0 = torch.stack([h_0[:, i * h_size:(i + 1) * h_size] for i in range(self.rnn.num_layers)], dim=0)
 
         if self.base_rnn == 'lstm':
-            c_0 = self.encoder1(x) # c_0
+            c_0 = self.encoder1(x) # c_0, shape: (num_layers * num_directions, batch_size, hidden_size)
             c_0 = torch.stack([c_0[:, i * h_size:(i+1) * h_size] for i in range(self.rnn.num_layers)], dim=0)
             output, (h_n, c_n) = self.rnn(input, (h_0, c_0))
 
-        else:
+        else: # for 'gru and rnn'
             output, h_n = self.rnn(input, h_0)
 
         x = self.decoder(output)
