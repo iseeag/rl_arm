@@ -36,7 +36,7 @@ class Timer:
 
 
 class AverageMeter:
-    def __init__(self, max_len = 80):
+    def __init__(self, max_len = 99):
         self.array = np.full([max_len], 1.0)
         self.max_len = max_len
         self.index = 0
@@ -68,6 +68,7 @@ class OptimizerContext:
 
 def add_save_load_optimize_optimizer_optim_context(cls, instance):
 
+    instance.save_path = 'saved_models'
     instance.optimizer = optim.Adam(instance.parameters())
     instance.optim_cont = OptimizerContext(instance.optimizer)
 
