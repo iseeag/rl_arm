@@ -1,15 +1,71 @@
-from utils import get_nn_params
+import typing
+from utils import get_nn_params, add_save_load_optimize_optimizer_optim_context
+from interface import get_arm1_end_points
 import torch
 import torch.optim as optim
 import torch.nn as nn
 import torch.nn.functional as F
 import math
 
+
+class PredictorLSTM(nn.Module):
+
+    def __init__(self, input_size, output_size, expand_ratio=3, seq_len=10, n_layer=2, base_rnn='lstm'):
+        super(PredictorLSTM, self).__init__()
+        self.input_size = input_size
+        self.expand_ratio = expand_ratio
+        self.seq_len = seq_len
+        self.n_layer = n_layer
+        self.base_rnn = base_rnn
+        if base_rnn == 'lstm':
+            self.encoder0 = Encoder(input_size, compress_ratio=expand_ratio * n_layer)
+            self.encoder1 = Encoder(input_size, compress_ratio=expand_ratio * n_layer)
+            self.rnn = nn.LSTM(1, self.encoder0.out_size // n_layer, n_layer, batch_first=True)
+        elif base_rnn == 'gru':
+            self.encoder0 = Encoder(input_size, compress_ratio=expand_ratio * n_layer)
+            self.rnn = nn.GRU(1, self.encoder0.out_size // n_layer, n_layer, batch_first=True)
+        else:
+            raise(AttributeError('unknown base rnn in PredictorLSTM'))
+
+        assert self.encoder0.out_size // n_layer == self.encoder0.out_size / n_layer  # sanity check
+        self.decoder = Decoder(self.encoder0.out_size // n_layer, output_size)
+
+        # self.rnn = nn.RNN
+        self.parameter_size = get_nn_params(self)
+        print(f'n_parameters: {self.parameter_size}')
+
+        add_save_load_optimize_optimizer_optim_context(PredictorLSTM, self)
+
+    def __call__(self, *input, **kwargs) -> typing.Any:
+        return super().__call__(*input, **kwargs)
+
+    def forward(self, x): # x::[batch, feature_len]
+        batch_size, input_size = x.shape
+
+        input = torch.zeros(batch_size, self.seq_len, 1)
+
+        h_size = self.rnn.hidden_size
+        h_0 = self.encoder0(x)  # h_0
+        h_0 = torch.stack([h_0[:, i * h_size:(i + 1) * h_size] for i in range(self.rnn.num_layers)], dim=0)
+
+        if self.base_rnn == 'lstm':
+            c_0 = self.encoder1(x) # c_0
+            c_0 = torch.stack([c_0[:, i * h_size:(i+1) * h_size] for i in range(self.rnn.num_layers)], dim=0)
+            output, (h_n, c_n) = self.rnn(input, (h_0, c_0))
+
+        else:
+            output, h_n = self.rnn(input, h_0)
+
+        x = self.decoder(output)
+
+        return x
+
+
+
 class Predictor(nn.Module):
 
     def __init__(self, input_size, output_size):
         super(Predictor, self).__init__()
-        self.save_path = 'saved_models'
         self.encoder = Encoder(input_size)
         self.stepper = Stepper(self.encoder.out_size)
         self.decoder = Decoder(self.stepper.out_size, output_size)
@@ -42,6 +98,9 @@ class Predictor(nn.Module):
         print('load successful')
         return True
 
+    def __call__(self, *input, **kwargs) -> typing.Any:
+        return super().__call__(*input, **kwargs)
+
 class Encoder(nn.Module):
 
     def __init__(self, in_size, compress_ratio=1.2, n_layer=1):
@@ -56,6 +115,9 @@ class Encoder(nn.Module):
             setattr(self, f'fc{i}', fc)
             self.fcs_list.append(f'fc{i}')
         self.parameter_size = get_nn_params(self)
+
+    def __call__(self, *input, **kwargs) -> typing.Any:
+        return super().__call__(*input, **kwargs)
 
     def forward(self, x):
         for fc_name in self.fcs_list[:-1]: # skip relu for the last layer
