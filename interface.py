@@ -1,6 +1,8 @@
 import numpy as np
 from environment import EnvironmentState
+from collections import deque
 from torch.utils.data import Dataset
+from torch import Tensor
 import torch
 
 def make_transfrom_f(include_torque=True):
@@ -35,7 +37,8 @@ def make_transfrom_f(include_torque=True):
         arm0.x, arm0.y, v0.x, v0.y, end0.x, end0.y, angular_velocity0, torque0[optional],
         arm1.x, arm1.y, v1.x, v1.y, end1.x, end1.y, angular_velocity1, torque1[optional],
         on_canvas
-        [float, float, float, float, float, float, float, float, float, float, float]
+        [float] * 17 (with torque)
+        [float] * 15 (without torque)
         all input scaled to [-1, 1] with tanh except end[0,1].[x,y]
         """
     def transform_env_state_to_nn_state(d, include_torque):
@@ -71,8 +74,19 @@ def make_transfrom_f(include_torque=True):
 
     return lambda d: torch.tensor(transform_env_state_to_nn_state(d, include_torque))
 
-def remove_torque(x: torch.Tensor):
-    return torch.cat((x.narrow(-1, 0, 7), x.narrow(-1, 8, 7), x.narrow(-1, 16, 1)))
+
+def remove_torque(x: Tensor):
+    return torch.cat((x.narrow(-1, 0, 7), x.narrow(-1, 8, 7), x.narrow(-1, 16, 1)), dim=-1)
+
+
+def replace_torque(x: Tensor, a: Tensor): # [float]*17, [float]*2
+    return torch.cat((x.narrow(-1, 0, 7), a.narrow(-1, 0, 1),
+                      x.narrow(-1, 8, 7), a.narrow(-1, 1, 1),
+                      x.narrow(-1, 16, 1)), dim=-1)
+
+
+def get_arm1_end_points(x: Tensor):
+    return x.narrow(-1, 12, 2)
 
 
 class StateDataset(Dataset):
@@ -96,10 +110,10 @@ class StateDataset(Dataset):
 
     def __getitem__(self, idx):
         # set random torque
-        if self.random_torque:
-            self.env.torque_random_set() # set torque
-            # self.env.step()
-            # self.env.torque_random_set()
+        if self.random_torque and idx % 2 == 0:
+            for _ in range(self.skip_step//8 + 1):
+                self.env.torque_random_set()
+                self.env.step()
         if self.remove_torque:
             self.env.step() # get rid of torque
         s0 = self.env.get_current_state()
@@ -116,4 +130,86 @@ class StateDataset(Dataset):
         self.env.torque_scaled_set(t0, t1)
 
 
+class StateDatasetLSTM(Dataset):
 
+    def __init__(self, env_instance: EnvironmentState, size=3500000, skip_step=4, seq_leng=10, remove_torque=False):
+        self.size = size
+        self.skip_step = skip_step
+        self.seq_leng = seq_leng
+        self.env = env_instance
+        self.transform_f = make_transfrom_f(include_torque=True)
+        self.output_size = len(self.transform_f(self.env.get_current_state()))
+        self.output_size_for_actor = self.output_size - 2
+        self.remove_torque = remove_torque
+        # initiate environment
+        self.cache_result = deque(maxlen=self.seq_leng)
+        for _ in range(20):
+            self.env.step(random_torque=True)
+        self.move_and_cache()
+
+
+    def __len__(self):
+        return self.size
+
+    def __getitem__(self, idx):
+        if idx % 9 == 0: # new action every ninth step
+            self.move_and_cache()
+
+        if self.remove_torque:
+            for i in range(self.skip_step):
+                self.env.step() # get rid of torque
+            self.append_result() # append env state to cache deque
+
+        s0 = self.cache_result.popleft()
+        for i in range(self.skip_step):
+            self.env.step()
+        self.append_result()
+
+        return {'s0': s0,
+                'result': torch.stack(list(self.cache_result))}
+
+    def append_result(self):
+        s1 = self.transform_f(self.env.get_current_state())
+        self.cache_result.append(s1)
+
+    def move_and_cache(self):
+        for _ in range(4): # torque * 4 to ramp up movement
+            self.env.step()
+            self.env.torque_random_set()
+        for i in range(self.skip_step * self.seq_leng):
+            if i % self.skip_step == 0:
+                self.append_result()
+            self.env.step()
+
+    def set_torque(self, t0, t1):
+        self.env.torque_scaled_set(t0, t1)
+
+
+
+
+class RewardDataset(Dataset):
+    def __init__(self, env_instance: EnvironmentState, size):
+        self.env = env_instance
+        self.size = size
+        ...
+
+    def __len__(self):
+        return self.size
+
+    def __getitem__(self, idx):
+        # set random torque
+        if self.random_torque and idx % 2 == 0:
+            for _ in range(self.skip_step // 8 + 1):
+                self.env.torque_random_set()
+                self.env.step()
+        if self.remove_torque:
+            self.env.step()  # get rid of torque
+        s0 = self.env.get_current_state()
+        for i in range(self.skip_step):
+            self.env.step()
+
+        self.env.step(random_torque=False)
+        s1 = self.env.get_current_state()
+
+        return {'s0': self.transform_f(s0),
+                's1': self.transform_f(s1)}
