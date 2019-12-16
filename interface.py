@@ -89,6 +89,15 @@ def get_arm1_end_points(x: Tensor):
     return x.narrow(-1, 12, 2)
 
 
+def get_torques(x: Tensor):
+    return torch.cat([x.narrow(-1, 7, 1),x.narrow(-1, 15, 1)], dim=-1)
+
+def fill_arm1_endpoint(endpoints: Tensor):
+    shape = list(endpoints.shape)
+    shape[-1] = 17
+    zeros = torch.zeros(shape)
+    return torch.cat((zeros.narrow(-1, 0, 12), endpoints, zeros.narrow(-1, 14, 3)), dim=-1)
+
 class StateDataset(Dataset):
 
     def __init__(self, env_instance: EnvironmentState, size=3500000, skip_step=0,
@@ -128,6 +137,58 @@ class StateDataset(Dataset):
 
     def set_torque(self, t0, t1):
         self.env.torque_scaled_set(t0, t1)
+
+
+
+class StateDatasetLSTMTorque(Dataset):
+    '''Dataset for PredictorLSTMTorque'''
+    def __init__(self, env_instance: EnvironmentState, size=3500000, skip_step=1, seq_len=15):
+        self.size = size
+        self.skip_step = skip_step
+        self.seq_leng = seq_len
+        self.env = env_instance
+        self.transform_f = make_transfrom_f(include_torque=True)
+        self.output_size = len(self.transform_f(self.env.get_current_state())) - 2
+        self.remove_torque = remove_torque
+        # initiate environment
+        self.cache_result = deque(maxlen=self.seq_leng + 1)
+        for _ in range(20):
+            self.env.step(random_torque=True)
+        self.move_and_cache()
+
+
+    def __len__(self):
+        return self.size
+
+    def __getitem__(self, idx):
+        for i in range(self.skip_step):
+            self.env.step()
+        self.env.torque_random_set()
+        self.append_result()
+
+        state_list = torch.stack(list(self.cache_result))
+        s0 = state_list[0]
+        torques = get_torques(state_list[:-1])
+        diffs = get_arm1_end_points(state_list)[1:] - get_arm1_end_points(state_list)[:-1]
+
+
+        return {'s0': s0,
+                'torques': torques,
+                'diffs': diffs}
+
+    def append_result(self):
+        s = self.transform_f(self.env.get_current_state())
+        self.cache_result.append(s)
+
+    def move_and_cache(self):
+        for _ in range(4): # get some energy
+            self.env.step()
+            self.env.torque_random_set()
+        for i in range(self.skip_step * self.seq_leng):
+            if i % self.skip_step == 0:
+                self.append_result()
+            self.env.step()
+
 
 
 class StateDatasetLSTM(Dataset):
@@ -183,8 +244,6 @@ class StateDatasetLSTM(Dataset):
 
     def set_torque(self, t0, t1):
         self.env.torque_scaled_set(t0, t1)
-
-
 
 
 class RewardDataset(Dataset):

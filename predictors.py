@@ -1,11 +1,72 @@
 import typing
 from utils import get_nn_params, add_save_load_optimize_optimizer_optim_context
-from interface import get_arm1_end_points
+from interface import get_arm1_end_points, remove_torque, get_torques
 import torch
 import torch.optim as optim
 import torch.nn as nn
 import torch.nn.functional as F
 import math
+
+
+
+class PredictorLSTMTorque(nn.Module):
+    '''
+    insert environment state as hidden state and take up torque magnitudes as input
+    generate a sequence of end_point_diffs (wrt last endpoint)
+    Inputs: input, h_0
+        input of shape: (batch, seq_len, torque_input_size)
+        h_0 of shape: (batch, environment_state_size)
+    Outputs: output
+        output of shape: (batch, end_point_diff)
+    '''
+    def __init__(self, input_size, output_size, torque_input_size=2, expand_ratio=2, n_layer=2, base_rnn='gru'):
+        super(PredictorLSTMTorque, self).__init__()
+        self.cls = PredictorLSTMTorque
+        self.input_size = input_size # 15 (env_state - torque)
+        self.stepwise_input_size = torque_input_size
+        self.expand_ratio = expand_ratio
+        self.n_layer = n_layer
+        self.base_rnn = base_rnn
+
+        self.encoder0 = Encoder(input_size, compress_ratio=expand_ratio * n_layer) # for h_0
+        if base_rnn == 'lstm':
+            self.encoder1 = Encoder(input_size, compress_ratio=expand_ratio * n_layer) # for c_0
+            self.rnn = nn.LSTM(torque_input_size, self.encoder0.out_size // n_layer, n_layer, batch_first=True)
+        elif base_rnn == 'gru':
+            self.rnn = nn.GRU(torque_input_size, self.encoder0.out_size // n_layer, n_layer, batch_first=True)
+        elif base_rnn == 'rnn':
+            self.rnn = nn.RNN(torque_input_size, self.encoder0.out_size // n_layer, n_layer, batch_first=True)
+        else:
+            raise(AttributeError('unknown base rnn in PredictorLSTM'))
+
+        assert self.encoder0.out_size // n_layer == self.encoder0.out_size / n_layer  # sanity check
+        self.decoder = Decoder(self.encoder0.out_size // n_layer, output_size)
+
+        self.parameter_size = get_nn_params(self, True)
+        add_save_load_optimize_optimizer_optim_context(self.cls, self)
+
+    def __call__(self, *input, **kwargs) -> typing.Any:
+        return super().__call__(*input, **kwargs)
+
+    def forward(self, env_state, torques): # env_state, shape: (batch, seq, env_state)|torques, shape: (batch, seq, torques)
+
+        h_size = self.rnn.hidden_size
+        # h_0, shape need to be: (num_layers * num_directions, batch_size, hidden_size)
+        h_0 = self.encoder0(remove_torque(env_state))
+        h_0 = torch.stack([h_0[:, i * h_size:(i + 1) * h_size] for i in range(self.rnn.num_layers)], dim=0)
+
+        if self.base_rnn == 'lstm':
+            # c_0, shape should be: (num_layers * num_directions, batch_size, hidden_size)
+            c_0 = self.encoder1(remove_torque(env_state))
+            c_0 = torch.stack([c_0[:, i * h_size:(i+1) * h_size] for i in range(self.rnn.num_layers)], dim=0)
+            output, (h_n, c_n) = self.rnn(torques, (h_0, c_0))
+
+        else: # for 'gru and rnn'
+            output, h_n = self.rnn(torques, h_0)
+
+        diffs = self.decoder(output)
+
+        return diffs
 
 
 class PredictorLSTM(nn.Module):
@@ -32,8 +93,7 @@ class PredictorLSTM(nn.Module):
         assert self.encoder0.out_size // n_layer == self.encoder0.out_size / n_layer  # sanity check
         self.decoder = Decoder(self.encoder0.out_size // n_layer, output_size)
 
-        self.parameter_size = get_nn_params(self)
-        print(f'n_parameters: {self.parameter_size}')
+        self.parameter_size = get_nn_params(self, True)
 
         add_save_load_optimize_optimizer_optim_context(PredictorLSTM, self)
 
@@ -61,7 +121,6 @@ class PredictorLSTM(nn.Module):
         return x
 
 
-
 class Predictor(nn.Module):
 
     def __init__(self, input_size, output_size):
@@ -69,8 +128,8 @@ class Predictor(nn.Module):
         self.encoder = Encoder(input_size)
         self.stepper = Stepper(self.encoder.out_size)
         self.decoder = Decoder(self.stepper.out_size, output_size)
-        self.parameter_size = get_nn_params(self)
-        print(f'n_parameters: {self.parameter_size}')
+        self.parameter_size = get_nn_params(self, True)
+        self.save_path = 'saved_models'
 
         self.optimizer = optim.Adam(self.parameters())
         self.criterion = nn.MSELoss()
