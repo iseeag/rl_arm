@@ -6,13 +6,15 @@ from functools import wraps
 import torch.nn as nn
 import torch
 
-def get_nn_params(model):
+def get_nn_params(model, print_out=False):
     pp=0
     for p in list(model.parameters()):
         nn=1
         for s in list(p.size()):
             nn = nn*s
         pp += nn
+    if print_out:
+        print(f'number of parameters: {pp}')
     return pp
 
 class Timer:
