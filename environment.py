@@ -21,7 +21,7 @@ class EnvironmentState:
                        self.arm1.shape)
         # set torques
         self.max_torque0 = self.arm0.body.moment
-        self.max_torque1 = self.arm1.body.moment * 2
+        self.max_torque1 = self.arm1.body.moment * 2 # torque ratio
         self.instant_torques = None
         # join arms
         self.pj0 = pm.PivotJoint(self.arm0.body, self.space.static_body, self.root0)
@@ -40,6 +40,8 @@ class EnvironmentState:
         self.cache_point_m = None
         self.cache_point_y = None
         self.cache_point_r = None
+        self.cache_point_c = None
+        self.cache_point_k = None
 
     def get_current_state(self):
         return {'arm0': self.arm0.info_dump(),
@@ -82,7 +84,7 @@ class EnvironmentState:
         self.drs0.stiffness = 0
         self.drs1.stiffness = 0
 
-    def randomise(self):
+    def randomize(self):
         self.arm0.body.angle = (1 - 2 * np.random.rand()) * 6.28
         self.arm1.body.angle = (1 - 2 * np.random.rand()) * 6.28
         for _ in range(500): self.step()
@@ -146,7 +148,9 @@ class EnvironmentState:
                      (self.cache_point_y, 'y'),
                      (self.cache_point_m, 'm'),
                      (self.cache_point_b, 'b'),
-                     (self.cache_point_r, 'r')]:
+                     (self.cache_point_r, 'r'),
+                     (self.cache_point_c, 'c'),
+                     (self.cache_point_k, 'k')]:
             if p is not None: self.new_dots(*p, color=c)
 
     def green_dot(self, point):
@@ -163,6 +167,12 @@ class EnvironmentState:
 
     def magenta_dot(self, point):
         self.cache_point_m = point
+
+    def cyan_dot(self, point):
+        self.cache_point_c = point
+
+    def black_dot(self, point):
+        self.cache_point_k = point
 
     def reset(self):
         self = EnvironmentState()
