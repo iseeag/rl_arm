@@ -8,6 +8,7 @@ ckpt/
 diary.txt
 journal.txt
 saved_models
+figures/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
