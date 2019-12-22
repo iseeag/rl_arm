@@ -1,4 +1,4 @@
-import typing
+from typing import *
 import time
 import numpy as np
 from torch import optim
@@ -58,7 +58,7 @@ class AverageMeter:
         return self.array.std()
 
 class OptimizerContext:
-    def __init__(self, optimizer: torch.optim.Adam):
+    def __init__(self, optimizer: torch.optim.Optimizer):
         self.optimizer = optimizer
 
     def __enter__(self):
@@ -70,8 +70,13 @@ class OptimizerContext:
 
 def add_save_load_optimize_optimizer_optim_context(cls, instance):
 
+    assert not hasattr(instance, 'save_path')
+    assert not hasattr(instance, 'optimizer')
+
     instance.save_path = 'saved_models'
-    instance.optimizer = optim.Adam(instance.parameters())
+    instance.optimizer = optim.Adam(instance.parameters(), amsgrad=True)
+    # instance.optimizer = optim.SGD(instance.parameters(), lr=1e-3, momentum=)
+
     instance.optim_cont = OptimizerContext(instance.optimizer)
 
     def save(self, name):
@@ -94,3 +99,72 @@ def add_save_load_optimize_optimizer_optim_context(cls, instance):
         return self.optim_cont
 
     setattr(cls, 'optimize_c', optimize_c)
+
+def add_auto_save(cls, instance, mode='min', n_delay=500):
+    '''Example:
+        >>> model = ...
+        >>>model.set_auto_save_name('name').set_auto_save_delay(1000).toggle_auto_save()
+        >>>'model save to path: path/name/pt'
+        >>>loss = ...
+        >>>model.save_by_score(loss)
+        '''
+
+    assert hasattr(instance, 'save_path')
+    assert mode == 'min' or mode == 'max'
+    assert not hasattr(instance, '_model_best_score')
+    assert not hasattr(instance, '_auto_save_name')
+    assert not hasattr(instance, '_auto_save_toggle')
+    assert not hasattr(instance, '_auto_save_first_n_delay')
+
+    instance._auto_save_toggle = False
+    instance._auto_save_first_n_delay = n_delay
+    if mode == 'min':
+        instance._model_best_score = float('inf')
+    else:
+        instance._model_best_score = float('-inf')
+
+    def save_by_score(self, score):
+        if self._auto_save_first_n_delay > 0:
+            self._auto_save_first_n_delay -= 1
+            self._model_best_score = score
+            return
+
+        if self._auto_save_toggle is True:
+            if mode == 'min':
+                if score < self._model_best_score:
+                    self._model_best_score = score
+                    print(f'smallest score: {score} ', end='')
+                    self.save(self._auto_save_name)
+            elif mode == 'max':
+                if score > self._model_best_score:
+                    self._model_best_score = score
+                    print(f'biggest score: {score} ', end='')
+                    self.save(self._auto_save_name)
+
+    def set_auto_save_name(self, name: str):
+        self._auto_save_name = name
+        print(f'set save name to {self._auto_save_name}')
+        return self
+
+    def set_auto_save_delay(self, n: int):
+        self._auto_save_first_n_delay = n
+        print(f'delay for {self._auto_save_first_n_delay} step')
+        return self
+
+    def toggle_auto_save(self):
+        if self._auto_save_name == None and self._auto_save_toggle is False:
+            raise Exception('Need a auto save name end with .pt! ')
+
+        self._auto_save_toggle = not self._auto_save_toggle
+        if self._auto_save_toggle:
+            print(f'Auto saving is on! will save model to {self.save_path}/{self._auto_save_name}, start after '
+                  f'{self._auto_save_first_n_delay} step if the given score to model.save_by_score(score) is the {mode}imum')
+        else:
+            print(f'Auto save is off')
+
+        return self
+
+    setattr(cls, 'save_by_score', save_by_score)
+    setattr(cls, 'set_auto_save_name', set_auto_save_name)
+    setattr(cls, 'set_auto_save_delay', set_auto_save_delay)
+    setattr(cls, 'toggle_auto_save', toggle_auto_save)
