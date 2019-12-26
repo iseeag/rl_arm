@@ -8,11 +8,40 @@ import torch.nn.functional as F
 import math
 
 
+class PredictorOfTorque(nn.Module):
+    '''Predictor that predict torques of t0 given full state of t0 and t1, specifically:
+        17, 17 => 2
+        Internally, it removes torque info of time 0 and calculate difference of end point arm1 end point
+        between t0 and t1 and concat these information into a vector as input to output torque vector
+        15 + 2 => 2
+    '''
+    def __init__(self, input_size, output_size):
+        super(PredictorOfTorque, self).__init__()
+        self.encoder = Encoder(input_size)
+        self.stepper = Stepper(self.encoder.out_size)
+        self.decoder = Decoder(self.stepper.out_size, output_size)
+
+        self.parameter_size = get_nn_params(self, True)
+        add_save_load_optimize_optimizer_optim_context(PredictorOfTorque, self)
+
+    def forward(self, x0, x1):
+        partial_x1 = get_arm1_end_points(x1) - get_arm1_end_points(x0)
+        x0_no_torque = remove_torque(x0)
+        x = torch.cat((x0_no_torque, partial_x1), -1)
+        x = self.encoder(x)
+        x = self.stepper(x)
+        x = self.decoder(x)
+        return x
+
+    def __call__(self, *input, **kwargs) -> typing.Any:
+        return super().__call__(*input, **kwargs)
+
+
 
 class PredictorLSTMTorque(nn.Module):
     '''
     insert environment state as hidden state and take up torque magnitudes as input
-    generate a sequence of end_point_diffs (wrt last endpoint)
+    generate a sequence of end_point_diffs
     Inputs: input, h_0
         input of shape: (batch, seq_len, torque_input_size)
         h_0 of shape: (batch, environment_state_size)
@@ -210,6 +239,7 @@ class Decoder(nn.Module):
         x = fc(x)
         return x
 
+
 class Stepper(nn.Module):
     def __init__(self, in_size, out_size=None, expand_ratio=10, h_layer=1, recurrent_step=0):
         super(Stepper, self).__init__()
@@ -231,6 +261,10 @@ class Stepper(nn.Module):
                 fc = getattr(self, fc_name)
                 x = F.relu(fc(x))
         return x
+
+    def __call__(self, *input, **kwargs) -> typing.Any:
+        return super().__call__(*input, **kwargs)
+
 
 def pretrain_encoder_decoder(encoder, decoder, epochs_size=600):
     class EncoderDecoder(nn.Module):
