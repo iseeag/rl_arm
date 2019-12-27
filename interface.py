@@ -96,6 +96,11 @@ def replace_torque(x: Tensor, a: Tensor): # [float]*17, [float]*2
                       x.narrow(-1, 16, 1)), dim=-1)
 
 
+def replace_arm1_endpoint(x: Tensor, e: Tensor): # [float]*17, [float]*2
+    return torch.cat((x.narrow(-1, 0, 12), e.narrow(-1, 0, 2),
+                      x.narrow(-1, 14, 3)), dim=-1)
+
+
 def get_arm1_end_points(x: Tensor):
     return x.narrow(-1, 12, 2)
 
@@ -131,7 +136,7 @@ class StateDatasetOfTorque(Dataset):
     def __getitem__(self, idx):
         # set random torque
         if self.random_torque and idx % 2 == 0:
-            for _ in range(3):
+            for _ in range(5):
                 self.env.step(random_torque=True)
         self.env.torque_random_set()
         if self.remove_torque:
