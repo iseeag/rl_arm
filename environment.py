@@ -80,6 +80,11 @@ class EnvironmentState:
         m0, m1 = self.max_torque0, self.max_torque1
         self.instant_torques = [m0 * t0, m1 * t1]
 
+    def torque_capped_set(self, t0, t1):
+        m0, m1 = self.max_torque0, self.max_torque1
+        factor = 1 if np.abs([t0, t1]).max() < 1 else np.abs([t0, t1]).max()
+        self.instant_torques = [m0 * t0 / factor, m1 * t1 / factor]
+
     def torque_reset(self):
         self.drs0.stiffness = 0
         self.drs1.stiffness = 0
