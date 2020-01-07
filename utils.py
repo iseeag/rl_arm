@@ -73,7 +73,8 @@ def add_save_load_optimize_optimizer_optim_context(cls, instance):
     assert not hasattr(instance, 'save_path')
     assert not hasattr(instance, 'optimizer')
 
-    instance.save_path = 'saved_models'
+    # instance.save_path = 'saved_models'
+    instance.save_path = 'trained_models'
     instance.optimizer = optim.Adam(instance.parameters(), amsgrad=True)
     # instance.optimizer = optim.SGD(instance.parameters(), lr=1e-3, momentum=)
 
