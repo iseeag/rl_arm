@@ -1,11 +1,8 @@
 """Showcase of a elastic spiderweb (drawing with pyglet)
 It is possible to grab one of the crossings with the mouse
+https://github.com/viblo/pymunk/blob/master/examples/spiderweb.py
 """
 
-__version__ = "$Id:$"
-__docformat__ = "reStructuredText"
-
-import math, random
 
 import pyglet
 

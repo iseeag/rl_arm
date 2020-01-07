@@ -1,5 +1,3 @@
-from predictors import Predictor
-from reward import reward
 import torch
 
 class Critic():
@@ -8,14 +6,15 @@ class Critic():
         self.predictor = predictor
         self.reward_f = reward_f
 
-    def __call__(self, x):
-        pred = self.predictor(x)
-        reward = self.reward_f(x, pred)
+    def __call__(self, x: torch.Tensor, actions: torch.Tensor):
+        pred_0, pred_a = self.predictor(x, actions) # predict both outcome of inaction and action
+        rewards = self.reward_f(pred_0, pred_a)
 
-        return reward
+        return rewards
 
 if __name__ == '__main__':
-    predictor = Predictor(10, 2)
-    critic = Critic(predictor, reward)
-    critic(torch.zeros(10))
+    ...
+    # predictor = Predictor(10, 2)
+    # critic = Critic(predictor, reward_f)
+    # q = critic(torch.zeros(10))
 

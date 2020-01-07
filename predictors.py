@@ -31,6 +31,7 @@ class PredictorOfTorque(nn.Module):
         x = self.encoder(x)
         x = self.stepper(x)
         x = self.decoder(x)
+        x = torch.tanh(x)
         return x
 
     def __call__(self, *input, **kwargs) -> typing.Any:
@@ -184,7 +185,7 @@ class Predictor(nn.Module):
         self.load_state_dict(torch.load(f'{self.save_path}/{name}'))
         self.eval()
         print('load successful')
-        return True
+        return self
 
     def __call__(self, *input, **kwargs) -> typing.Any:
         return super().__call__(*input, **kwargs)

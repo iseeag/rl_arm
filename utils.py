@@ -90,7 +90,7 @@ def add_save_load_optimize_optimizer_optim_context(cls, instance):
         self.load_state_dict(torch.load(f'{self.save_path}/{name}'))
         self.eval()
         print('load successful')
-        return True
+        return self
 
     setattr(cls, 'load', load)
 
