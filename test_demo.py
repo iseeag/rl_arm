@@ -1,8 +1,8 @@
 #!/usr/bin/python
 
-from interface import *
+from interface import make_transfrom_f
 from environment import EnvironmentState
-from actors import Actor, ActorP, ActorAgregate
+from actors import ActorP
 import torch
 import matplotlib
 
@@ -11,13 +11,12 @@ import matplotlib
 if __name__ == '__main__':
     matplotlib.interactive(True)
     env = EnvironmentState()
-    # setup predictor to return dummy full state
     config_array = [15, 30, 15, 2]
     actor = ActorP(config_array).load('actor_multi_14_6.pt')
     transform_f = make_transfrom_f()
     env.green_dot([[14.0, 6.0]])  # target point
-    for i in range(1, 3000):
-        # env.step(random_torque=True)
+    env.randomize()
+    for i in range(1, 2000):
         env.step()
         if i % 1 == 0:
             with torch.no_grad():

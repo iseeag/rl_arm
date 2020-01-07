@@ -1,20 +1,11 @@
 #!/usr/bin/python
 from utils import Timer, AverageMeter
-from interface import *
 from dataset import *
 from predictors import Predictor, PredictorLSTM, PredictorLSTMTorque, PredictorOfTorque
 from environment import EnvironmentState
-from mappings import StateMapStatic
 from torch.utils.data import DataLoader
-from actors import Actor, ActorP, ActorAgregate
-from rewards import *
-from critics import Critic
-from pymunk import Vec2d
-from torch import Tensor
 import torch
-import time
-from copy import deepcopy
-import matplotlib.pyplot as plt
+
 
 # -------------------------------- predictor training scripts --------------------------------------------------------
 if __name__ == '__main__':
