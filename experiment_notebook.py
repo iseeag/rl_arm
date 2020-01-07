@@ -632,4 +632,3 @@ for j in range(1000):
     avm.log(r.data)
     if j % 5 == 0:
         print(f'loop {j}, avg loss {avm.value:.4f} {avm.std:.4f}, ')
-# ------------------------------------
