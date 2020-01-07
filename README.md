@@ -20,7 +20,13 @@ Reacher问题在经典的path planning上面已经被研究透了，但是以RL�
 
 
 ### Demo
-如果有时间可跑一下test_demo_0.py和test_demo.py，分别对比改良算法前后policy，了但是需要安装以下的库：
+如果有时间可跑一下test_demo_0.py和test_demo.py，分别对比改良算法前后policy:
+```buildoutcfg
+git clone https://github.com/iseeag/rl_arm
+python test_demo_0.py
+python test_demo.py
+```
+需要python 3以上并需要以下的库：
 * pytorch
 * numpy
 * matplotlib
@@ -29,6 +35,7 @@ Reacher问题在经典的path planning上面已经被研究透了，但是以RL�
 ```
 conda install -c conda-forge pymunk
 ```    
+
   
 ### 备注
 一般production的时候还会用argparse和一个Config的类把超参数理好，但是现在训练脚本还有很多的heuristic在里面，就是时机还没到。
